@@ -1,0 +1,164 @@
+---
+title: "ADA Final Project"
+author: "Yuying Hu"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+#### 1. Load libraries and import the data.
+```{r}
+pacman::p_load(readr, tidyverse, nnet, MASS, funModeling, brant, broom,table1,DiagrammeR, lmtest)
+
+# readr: for read txt file
+# tidyverse: for various packages
+# nnet: Multinomial logistic regresison
+# MASS: Ordinal logistic regression
+# funModeling: for describe function
+# brant: for testing parallel regression assumption
+
+# read in the data
+breastcancer <- read_csv("/Users/yuying/Desktop/2022Fall/Advanced data analysis/ADAFinalProject/ADA_breastcancer.csv")
+```
+
+#### 2.Check variables types in dataframe
+```{r}
+str(breastcancer)
+```
+
+#### 3. Get the rows of the data using the head function.
+```{r}
+head(breastcancer)
+```
+
+#### 4.Data Management: create a new dataset, along with deleting and renaming columns
+```{r}
+# create a new dataset and delete unwanted columns
+breastcancer_new <- breastcancer %>%
+  dplyr::select(-c(1, 6, 8, 11:13, 16:20))
+# rename columns to be used
+names(breastcancer_new)<-c("PatientID", "Age", "Age_at_menarche", "Pregnancy", "Duration_of_disease_onset", "Number_of_metastatic_lymph_nodes", "Family_History","Tumor_size", "Stage", "Sex")
+# Check head of the new dataset to ensure changes
+head(breastcancer_new)
+```
+
+#### 5.Look at the variable summaries in new dataset and check for missing data
+```{r}
+summary(breastcancer_new)
+```
+
+#### 6.recode variables for analysis
+```{r}
+# 1)Family history -set no family history as reference
+breastcancer_new$familyhistory_new <- factor(breastcancer_new$Family_History, levels = c(0:1), labels = c("Without family history", "With family history")) 
+# make family history a factor variable and give factor labels of "Without family history" for no family history and "With family history" family history for having family history
+
+# 2)Stage - set early stage as reference  
+breastcancer_new <- breastcancer_new %>%
+mutate(stage_binarynew = case_when(Stage %in% c(0, 1) ~ 0,
+                                  Stage %in% c(2,3) ~ 1))
+ breastcancer_new$stage_binarynew <- factor(breastcancer_new$stage_binarynew, levels = c(0:1), labels = c("Early stage", "Late stage"))
+ # make stage a factor variable and give factor labels of early stage, and late stage for breast cancer tumor stage
+ 
+# 3)Pregnancy - set no pregnancy as reference 
+breastcancer_new$pregnancy_new <- factor(breastcancer_new$Pregnancy, levels = c(0:1), labels = c("No", "Yes")) 
+# make pregnancy a factor and give factor labels of No for no pregnancy and yes for pregnancy 
+ 
+# checking to make sure the recode worked
+head(breastcancer_new)
+```
+
+#### 7.check the variables of interest and their distribution
+```{r}
+describe(breastcancer_new)
+
+table(breastcancer_new$familyhistory_new, breastcancer_new$stage_binarynew)
+
+```
+
+
+#### 8. Creating a Table 1 using the table 1 function to show describtive statistics. 
+```{r}
+# Adding labels to the variables
+label(breastcancer_new$Age)<-"Age (years)"
+label(breastcancer_new$Sex)<-"Sex"
+label(breastcancer_new$Age_at_menarche)<-"Age at menarche (years)"
+label(breastcancer_new$pregnancy_new)<-"Pregnancy history"
+label(breastcancer_new$stage_binarynew)<-"Tumor stage at diagnosis"
+label(breastcancer_new$Duration_of_disease_onset)<-"Duration of disease onset (months)"
+label(breastcancer_new$Number_of_metastatic_lymph_nodes)<-"Number of metastatic lymph nodes"
+label(breastcancer_new$Tumor_size)<-"Tumor size"
+# Adding a label to the overall column "Total" with the overall argument
+# Adding a 'Variable' label to the first column with the rowlabelhead argument
+# Adding a footnote to the table with the footnote argument
+table1(~Age + Sex + Age_at_menarche + pregnancy_new + stage_binarynew + Duration_of_disease_onset + Number_of_metastatic_lymph_nodes + Tumor_size |familyhistory_new,overall="Total", rowlabelhead="Variable", footnote='SD = standard deviation', breastcancer_new)
+```
+## Interpretations
+#  Age: Those without a family history were younger than those with a family history, with a mean age of 29.4 (sd=3.04) and 31.2 (sd=3.97), respectively. Those without a family history had a younger median age at diagnosis than those with a family history, with a median age of 29 and 29.5 years, respectively.
+
+#  Stage at diagnosis: Those without a family history were diagnosed with an early stage at a slightly lower percentage than those with a family history (27.5% vs. 27.8%). People without a family history were diagnosed with an late stage at a slightly higher percentage than those with a family history (72.5% vs. 72.8%). 
+
+#### 9. Figure 1 that shows inclusions
+```{r}
+#Figure 1
+grViz("digraph flowchart {
+
+      # node definitions with substituted label text
+      node [fontname = Helvetica, shape = rectangle, fontsize=15] 
+      #notes indicate three boxes in our diagram.
+      tab1 [label = '@@1']
+      tab2 [label = '@@2']
+      tab3 [label = '@@3']
+      
+      tab1 -> tab3 
+      tab2 -> tab3 
+}
+      #This set of code provides the text in each rectangle box.
+      [1]: 'Pregnancy-associated breast cancer patients diagnosed at Hebei Breast Disease Treatment Center from January 2011 to December 2017 n=40'
+      [2]: 'Non-pregnancy-associated breast cancer patients diagnosed at Hebei Breast Disease Treatment Center from January 2011 to December 2017 n=80'
+      [3]: 'Total breast cancer patients diagnosed at Hebei Breast Disease Treatment Center from January 2011 to December 2017 n=120'
+      ")
+
+```
+
+#### 10. Execute a binominal logistic regression model for the association between family history and stage at diagnosis.
+```{r}
+model1<- glm(stage_binarynew ~ familyhistory_new, data=breastcancer_new, family=binomial())
+
+library(odds.n.ends)
+odds.n.ends(model1)
+tidy(model1, conf.int=TRUE, exponentiate = TRUE)
+```
+
+## Interpretation
+-The odds of having late vs early tumor stage at diagnosis in patients with family history is 0.98 (95%CI 0.34-3.29) times the odds in patients without family history. 
+
+#### 11.Test the linearity assumption for Age using the Box Tidwell test. A SIGNIFICANT (i.e. p < .05) coefficient means the assumption IS VIOLATED and we should consider using a categorized measure of Age.
+```{r}
+breastcancer_new <- breastcancer_new %>%
+  mutate(age.times.logage = Age * log(Age)) # create term to test linearity
+
+model2 <- glm( stage_binarynew~ Age+age.times.logage, data=breastcancer_new, family="binomial") 
+summary(model2)
+#linearity assumption is not violated for Age
+```
+
+#### 12. Adjusting for age as a continuous variable
+```{r}
+model3 <- glm(stage_binarynew ~ familyhistory_new + Age, data=breastcancer_new, family=binomial())
+summary(model3)
+## extract coefficients from the model, exponentiate and CI
+tidy(model3, conf.int=TRUE, exponentiate = TRUE)
+```
+
+
+#### Interpretation
+*Categorical variable*
+-The odds of having late vs early tumor stage at diagnosis in patients with family history is 0.74 (95%CI 0.23-2.59) times the odds in patients without family history after adjusting for age. 
+
+#### 13. Compare the full model 
+```{r}
+# likelihood ratio test: compare two nested models
+lrtest(model1, model3)
+# likelihood ratio test is significant. Model2 has better goodness-of-fit.  
+```
+
